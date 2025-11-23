@@ -328,7 +328,7 @@ def test_malformed_clue_vec_raises_error():
         "blue_guess": {"tile_index": torch.tensor([0, 0])},
     }
 
-    with pytest.raises(ValueError, match="invalid shape"):
+    with pytest.raises(ValueError, match="provided clue_vec with shape"):
         env.step(actions_dict)
 
 
@@ -366,6 +366,24 @@ def test_finished_game_preserves_clue_vectors():
     # Game 0 should preserve its clue vector
     assert torch.allclose(env.current_clue_vectors[0], test_vec)
     assert env.game_state.current_clue_number[0] == 3
+
+
+def test_observation_mutation_doesnt_affect_env():
+    """Test that mutating observation tensors doesn't corrupt env state."""
+    env = VectorBatchEnv(batch_size=1, seed=42)
+    env.reset()
+
+    # Get observations
+    obs = env._get_observations()
+
+    # Get the original board vector value from env
+    original_value = env.board_vectors[0, 0].clone()
+
+    # Mutate the observation (should not affect env since it's a clone)
+    obs["red_spy"]["board_vectors"][0, 0] = torch.zeros_like(obs["red_spy"]["board_vectors"][0, 0])
+
+    # Verify env board_vectors are unchanged
+    assert torch.allclose(env.board_vectors[0, 0], original_value)
 
 
 if __name__ == "__main__":

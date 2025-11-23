@@ -21,7 +21,8 @@ def process_spymaster_actions(
     embedding_dim: int = 384,
     prev_clue_indices: Optional[torch.Tensor] = None,
     prev_clue_numbers: Optional[torch.Tensor] = None,
-    prev_clue_outputs: Optional[Union[torch.Tensor, list[str]]] = None
+    prev_vectors: Optional[torch.Tensor] = None,
+    prev_words: Optional[list[str]] = None
 ) -> tuple[torch.Tensor, torch.Tensor, Union[torch.Tensor, list[str]]]:
     """
     Process spymaster actions and select active clues.
@@ -43,7 +44,8 @@ def process_spymaster_actions(
         embedding_dim: Embedding dimension for vector clues (required for vector mode)
         prev_clue_indices: Optional [B] tensor of previous clue indices (preserved when both spymasters inactive)
         prev_clue_numbers: Optional [B] tensor of previous clue numbers (preserved when both spymasters inactive)
-        prev_clue_outputs: Optional previous clue outputs (preserved when both spymasters inactive)
+        prev_vectors: Optional [B, D] tensor of previous clue vectors (for vector mode)
+        prev_words: Optional list of previous clue words (for word mode)
 
     Returns:
         Tuple of:
@@ -71,10 +73,9 @@ def process_spymaster_actions(
             if red_clue_vecs.ndim == 1:
                 red_clue_vecs = red_clue_vecs.unsqueeze(0)
             if red_clue_vecs.shape[0] != batch_size or red_clue_vecs.shape[1] != embedding_dim:
-                # Raise error instead of silently zeroing
                 raise ValueError(
-                    f"Red spymaster clue_vec has invalid shape {red_clue_vecs.shape}. "
-                    f"Expected ({batch_size}, {embedding_dim})"
+                    f"red_spy provided clue_vec with shape {red_clue_vecs.shape}, "
+                    f"expected ({batch_size}, {embedding_dim})"
                 )
 
         blue_clue_vecs = blue_spy_actions.get("clue_vec", None)
@@ -86,10 +87,9 @@ def process_spymaster_actions(
             if blue_clue_vecs.ndim == 1:
                 blue_clue_vecs = blue_clue_vecs.unsqueeze(0)
             if blue_clue_vecs.shape[0] != batch_size or blue_clue_vecs.shape[1] != embedding_dim:
-                # Raise error instead of silently zeroing
                 raise ValueError(
-                    f"Blue spymaster clue_vec has invalid shape {blue_clue_vecs.shape}. "
-                    f"Expected ({batch_size}, {embedding_dim})"
+                    f"blue_spy provided clue_vec with shape {blue_clue_vecs.shape}, "
+                    f"expected ({batch_size}, {embedding_dim})"
                 )
 
         # Select based on active mask
@@ -213,28 +213,29 @@ def process_spymaster_actions(
 
     # Preserve previous clues for games where neither spymaster is active
     # This prevents overwriting historical clues shown to guessers in finished games
-    if prev_clue_indices is not None and prev_clue_numbers is not None and prev_clue_outputs is not None:
-        inactive_mask = ~(active_red | active_blue)
+    is_active = active_red | active_blue
+    inactive_mask = ~is_active
 
+    if prev_clue_indices is not None and prev_clue_numbers is not None:
         # Preserve indices
         clue_indices = torch.where(inactive_mask, prev_clue_indices, clue_indices)
 
         # Preserve numbers
         clue_numbers = torch.where(inactive_mask, prev_clue_numbers, clue_numbers)
 
-        # Preserve outputs (vector or word)
-        if clue_type == "vector":
-            # For vectors, use torch.where with broadcasting
-            clue_outputs = torch.where(
-                inactive_mask.unsqueeze(1),
-                prev_clue_outputs,
-                clue_outputs
-            )
-        else:
-            # For word lists, preserve individual words
-            clue_outputs = [
-                prev_clue_outputs[i] if inactive_mask[i].item() else clue_outputs[i]
-                for i in range(batch_size)
-            ]
+    # Preserve outputs (vector or word)
+    if clue_type == "vector" and prev_vectors is not None:
+        # For vectors, use torch.where with broadcasting
+        clue_outputs = torch.where(
+            is_active.unsqueeze(1),
+            clue_outputs,
+            prev_vectors
+        )
+    elif clue_type == "word" and prev_words is not None:
+        # For word lists, preserve individual words
+        clue_outputs = [
+            clue_outputs[i] if is_active[i].item() else prev_words[i]
+            for i in range(batch_size)
+        ]
 
     return clue_indices, clue_numbers, clue_outputs

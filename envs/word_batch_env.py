@@ -236,7 +236,7 @@ class WordBatchEnv:
             clue_type="word",
             prev_clue_indices=self.game_state.current_clue_index,
             prev_clue_numbers=self.game_state.current_clue_number,
-            prev_clue_outputs=self.current_clue_words
+            prev_words=self.current_clue_words
         )
 
         # Store clue words for observations
@@ -244,6 +244,26 @@ class WordBatchEnv:
 
         # Update game state with clues
         self.game_state.give_clue(clue_indices, clue_numbers)
+
+    def _word_to_index(self, b: int, word: str) -> int:
+        """
+        Convert a word guess to a tile index for a specific game.
+
+        Args:
+            b: Game index in batch
+            word: Word string to convert (case-insensitive)
+
+        Returns:
+            Tile index
+
+        Raises:
+            ValueError: If word not found on the board
+        """
+        upper_word = word.upper()
+        try:
+            return self.word_views[b].get_index(upper_word)
+        except ValueError:
+            raise ValueError(f"Unknown guess '{word}' for game {b}")
 
     def _process_guesser_actions(
         self,
@@ -278,14 +298,7 @@ class WordBatchEnv:
             if isinstance(word_list, list):
                 for b in range(min(len(word_list), self.batch_size)):
                     word = word_list[b]
-                    try:
-                        red_indices[b] = self.word_views[b].get_index(word)
-                    except ValueError:
-                        # Invalid word: raise error with clear message
-                        raise ValueError(
-                            f"Invalid guess word '{word}' in game {b}. "
-                            f"Word not found on board."
-                        )
+                    red_indices[b] = self._word_to_index(b, word)
         elif "tile_index" in red_guess_actions:
             idx_array = red_guess_actions["tile_index"]
             if isinstance(idx_array, torch.Tensor):
@@ -299,14 +312,7 @@ class WordBatchEnv:
             if isinstance(word_list, list):
                 for b in range(min(len(word_list), self.batch_size)):
                     word = word_list[b]
-                    try:
-                        blue_indices[b] = self.word_views[b].get_index(word)
-                    except ValueError:
-                        # Invalid word: raise error with clear message
-                        raise ValueError(
-                            f"Invalid guess word '{word}' in game {b}. "
-                            f"Word not found on board."
-                        )
+                    blue_indices[b] = self._word_to_index(b, word)
 
         # Vectorized selection based on active masks
         tile_indices = torch.where(
@@ -394,12 +400,12 @@ class WordBatchEnv:
         Build shared observations common to all agents.
 
         Returns:
-            Dictionary with cloned tensors and immutable lists to prevent mutation
+            Dictionary with cloned tensors and lists for mutable data
         """
         base = {}
 
-        # Words for each game: list of tuples (immutable to prevent mutation)
-        base["words"] = [tuple(view.get_all_words()) for view in self.word_views]
+        # Words for each game: list of lists (will be copied per agent)
+        base["words"] = [view.get_all_words() for view in self.word_views]
 
         # Common state tensors (cloned to prevent mutation)
         base["revealed"] = self.game_state.revealed.clone()
@@ -408,7 +414,7 @@ class WordBatchEnv:
 
         # Tensors for role-specific use (cloned to prevent mutation)
         base["colors"] = self.game_state.colors.clone()
-        base["current_clue"] = tuple(self.current_clue_words)
+        base["current_clue"] = self.current_clue_words  # Will be copied per agent
         base["current_clue_number"] = self.game_state.current_clue_number.clone()
         base["remaining_guesses"] = self.game_state.remaining_guesses.clone()
 
@@ -421,7 +427,7 @@ class WordBatchEnv:
         Returns:
             Dictionary mapping agent_id to observation dict
         """
-        # Get base observation (cloned tensors and copied lists)
+        # Get base observation (cloned tensors and lists)
         base = self._base_observation()
         obs_dict = {}
 
@@ -430,9 +436,9 @@ class WordBatchEnv:
             team = "red" if "red" in agent_id else "blue"
             is_spymaster = "spy" in agent_id
 
-            # Build observation with cloned tensors and copied lists from base
+            # Build observation with cloned tensors and fresh list copies per agent
             obs = {
-                "words": base["words"],
+                "words": [list(words) for words in base["words"]],
                 "revealed": base["revealed"],
                 "current_team": base["current_team"],
                 "phase": base["phase"],
@@ -445,8 +451,8 @@ class WordBatchEnv:
                 # Guessers don't see colors
                 obs["colors"] = None
 
-                # Guessers see current clue
-                obs["current_clue"] = base["current_clue"]
+                # Guessers see current clue (fresh copy)
+                obs["current_clue"] = list(base["current_clue"])
                 obs["current_clue_number"] = base["current_clue_number"]
                 obs["remaining_guesses"] = base["remaining_guesses"]
 

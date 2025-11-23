@@ -65,8 +65,7 @@ class EmbeddingSpymaster(BaseSpymaster):
             EmbeddingSpymaster._model_cache[cache_key] = load_embedding_model(model_name, device=self.device)
 
         self.model, self.using_fake_embeddings = EmbeddingSpymaster._model_cache[cache_key]
-        if hasattr(self.model, "to"):
-            self.model.to(self.device)
+        # Model is already on correct device from cache; don't move it in-place
         if hasattr(self.model, "eval"):
             self.model.eval()
         if self.using_fake_embeddings and not EmbeddingSpymaster._fake_warning_printed:

@@ -71,7 +71,7 @@ class MultiAgentCodenamesExperiment:
         self.env_factory = env_factory
         self.max_turns = max_turns
 
-    def _slice_dict(self, data_dict: dict, n: int) -> dict:
+    def _slice_dict(self, data_dict: dict, n: int, keys_to_slice: Optional[set] = None) -> dict:
         """
         Slice each value in dict to first n elements along batch dimension.
 
@@ -80,15 +80,23 @@ class MultiAgentCodenamesExperiment:
         Args:
             data_dict: Dictionary with tensor/array/list values
             n: Number of elements to keep
+            keys_to_slice: Optional set of keys to slice. If None, slice all keys.
+                          If provided, only slice entries whose keys are in the set.
 
         Returns:
             Dictionary with sliced values
         """
         sliced = {}
         for key, value in data_dict.items():
-            if isinstance(value, dict):
+            # Check if we should slice this key
+            should_slice = keys_to_slice is None or key in keys_to_slice
+
+            if not should_slice:
+                # Don't slice this key, just copy it
+                sliced[key] = value
+            elif isinstance(value, dict):
                 # Recursively slice nested dicts
-                sliced[key] = self._slice_dict(value, n)
+                sliced[key] = self._slice_dict(value, n, keys_to_slice)
             elif isinstance(value, torch.Tensor):
                 sliced[key] = value[:n]
             elif isinstance(value, list):

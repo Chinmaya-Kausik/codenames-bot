@@ -195,7 +195,7 @@ class VectorBatchEnv:
             embedding_dim=self.embedding_dim,
             prev_clue_indices=self.game_state.current_clue_index,
             prev_clue_numbers=self.game_state.current_clue_number,
-            prev_clue_outputs=self.current_clue_vectors
+            prev_vectors=self.current_clue_vectors
         )
 
         # Store clue vectors for observations

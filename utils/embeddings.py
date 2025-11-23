@@ -158,11 +158,10 @@ def encode_vocab(
         cache_key: optional key (> (model_name, identifier)) for reuse
     """
     if cache_key is not None and cache_key in _GLOBAL_VOCAB_CACHE:
-        # Clone to requested device instead of moving cached tensor
         cached = _GLOBAL_VOCAB_CACHE[cache_key]
-        if cached.device != device:
-            return cached.to(device)
-        return cached.clone()
+        if cached.device == device:
+            return cached
+        return cached.to(device)
 
     if not tokens:
         empty = torch.zeros(0, getattr(model, "dim", DEFAULT_DIM), device=device)

@@ -494,7 +494,7 @@ def test_invalid_word_guess_raises_error():
         "blue_guess": {"word": ["ALSONOTAWORD"]},
     }
 
-    with pytest.raises(ValueError, match="Invalid guess word"):
+    with pytest.raises(ValueError, match="Unknown guess 'NOTAWORD' for game 0"):
         env.step(actions_dict)
 
 
@@ -530,18 +530,19 @@ def test_lowercase_word_guess_works():
 def test_observation_mutation_doesnt_affect_env():
     """Test that mutating observation lists doesn't corrupt env state."""
     env = WordBatchEnv(batch_size=1, seed=42)
-    obs = env.reset()
+    env.reset()
 
-    # Get words from observation
-    words_before = env.word_views[0].get_all_words()
+    # Get observations
+    obs = env._get_observations()
 
-    # Try to mutate the observation (should fail since it's a tuple)
-    with pytest.raises((TypeError, AttributeError)):
-        obs["red_spy"]["words"][0][0] = "HACKED"
+    # Get the original word from env
+    original_word = env.word_views[0].get_word(0)
 
-    # Verify words are unchanged
-    words_after = env.word_views[0].get_all_words()
-    assert words_before == words_after
+    # Mutate the observation (should not affect env since it's a copy)
+    obs["red_spy"]["words"][0][0] = "HACKED"
+
+    # Verify env words are unchanged
+    assert env.word_views[0].get_word(0) == original_word
 
 
 def test_finished_game_preserves_clues():
