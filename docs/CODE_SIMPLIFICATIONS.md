@@ -2,6 +2,8 @@
 
 Follow every instruction exactly. All decisions have already been made—do not invent alternatives or defer work. Update this file if you discover additional problems.
 
+**STATUS: All fixes completed and verified. All tests passing.**
+
 ---
 
 ## 1. Blue Guesser Tile Indices
@@ -69,3 +71,33 @@ Run the following after applying all fixes:
 2. `python -m pytest tests/test_multi_agent_experiment.py`
 3. Any additional regression tests you added.
 Record the commands and results in your PR description.
+
+---
+
+## Implementation Summary
+
+All fixes have been successfully implemented and tested:
+
+### 1. Blue Guesser Tile Indices ✓
+- **File**: `envs/word_batch_env.py:316-321`
+- **Change**: Added `elif "tile_index" in blue_guess_actions:` branch mirroring red team logic
+- **Test**: `tests/test_word_batch_env.py::test_blue_guesser_tile_index` - PASSED
+
+### 2. Word Guess Conversion For Inactive Agents ✓
+- **File**: `envs/word_batch_env.py:300-302, 315-317`
+- **Change**: Added `if not active_masks["red_guess"][b]: continue` and `if not active_masks["blue_guess"][b]: continue` guards
+- **Test**: `tests/test_word_batch_env.py::test_inactive_team_invalid_word_no_error` - PASSED
+
+### 3. Tracker Episode Infos When Loop Doesn't Run ✓
+- **File**: `experiments/multi_agent_experiment.py:167, 200-204`
+- **Change**: Initialize `sliced_infos = None` before loop, populate from `env._get_infos()` if still None after loop
+- **Additional Fix**: Updated all trackers (SummaryTracker, EpisodeTracker, TrajectoryTracker) in `experiments/trackers.py` to initialize agent_ids in `on_episode_end` when max_turns=0
+- **Test**: `tests/test_multi_agent_experiment.py::test_max_turns_zero` - PASSED
+
+### Test Results
+```
+tests/test_word_batch_env.py: 23 passed in 1.00s
+tests/test_multi_agent_experiment.py: 20 passed in 12.83s
+```
+
+All tests passing. Ready for review.

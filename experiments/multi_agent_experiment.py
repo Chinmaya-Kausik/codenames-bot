@@ -163,12 +163,8 @@ class MultiAgentCodenamesExperiment:
             # Reset environment
             obs_dict = env.reset(seed=game_seed)
 
-            # Initialize sliced_infos in case loop doesn't run
-            # Use empty infos since we don't have any step data yet
-            sliced_infos = self._slice_dict(
-                {agent_id: {} for agent_id in env.agent_ids},
-                games_this_batch
-            )
+            # Initialize sliced_infos to None - will be set in loop or after
+            sliced_infos = None
 
             # Run game loop
             for turn in range(self.max_turns):
@@ -200,6 +196,12 @@ class MultiAgentCodenamesExperiment:
                     dones_dict=sliced_dones,
                     infos_dict=sliced_infos
                 )
+
+            # If loop didn't run (max_turns=0 or all games finished immediately),
+            # get infos from environment's current state
+            if sliced_infos is None:
+                infos_dict = env._get_infos()
+                sliced_infos = self._slice_dict(infos_dict, games_this_batch)
 
             # Episode end callback with sliced data
             tracker.on_episode_end(

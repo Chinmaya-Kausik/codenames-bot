@@ -500,3 +500,25 @@ def test_exact_game_count_with_large_batch():
 
     # Should have exactly 5 episodes
     assert len(episode_results) == 5
+
+
+def test_max_turns_zero():
+    """Test that max_turns=0 completes without errors."""
+    exp = MultiAgentCodenamesExperiment(
+        env_factory=make_env_factory(batch_size=1),
+        max_turns=0  # Loop should not run
+    )
+
+    tracker = SummaryTracker()
+    results = exp.run_games(
+        policy_map=make_policy_map(),
+        n_games=3,
+        tracker=tracker,
+        seed=42
+    )
+
+    # Should complete without error and have initial game data
+    assert results["total_games"] == 3
+    # All games should have winner and turn_count in their infos
+    # (even though no steps were taken)
+    # The tracker should be able to access winner/turn_count without crashing

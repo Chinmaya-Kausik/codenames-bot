@@ -545,6 +545,86 @@ def test_observation_mutation_doesnt_affect_env():
     assert env.word_views[0].get_word(0) == original_word
 
 
+def test_inactive_team_invalid_word_no_error():
+    """Test that inactive team submitting invalid word doesn't raise error."""
+    batch_size = 1
+    env = WordBatchEnv(batch_size=batch_size, seed=42)
+    env.reset()
+
+    # Give clue to transition to guesser phase
+    actions_dict = {
+        "red_spy": {"clue": ["FIRE"], "clue_number": torch.tensor([2])},
+        "red_guess": {"tile_index": torch.tensor([0])},
+        "blue_spy": {"clue": ["WATER"], "clue_number": torch.tensor([2])},
+        "blue_guess": {"tile_index": torch.tensor([0])},
+    }
+    env.step(actions_dict)
+
+    # Determine which team is active
+    active_masks = env.game_state.get_active_agent_masks()
+
+    # Get a valid word for the active team
+    team_tile_idx = torch.where(env.game_state.colors[0] == env.game_state.current_team[0])[0][0]
+    valid_word = env.word_views[0].get_word(team_tile_idx)
+
+    # Both teams submit guesses: active team with valid word, inactive with invalid
+    if active_masks["red_guess"][0]:
+        # Red is active, blue is inactive
+        actions_dict = {
+            "red_spy": {"clue": [""], "clue_number": torch.zeros(batch_size, dtype=torch.int32)},
+            "red_guess": {"word": [valid_word]},  # Valid word
+            "blue_spy": {"clue": [""], "clue_number": torch.zeros(batch_size, dtype=torch.int32)},
+            "blue_guess": {"word": ["INVALIDWORD"]},  # Invalid word but blue is inactive
+        }
+    else:
+        # Blue is active, red is inactive
+        actions_dict = {
+            "red_spy": {"clue": [""], "clue_number": torch.zeros(batch_size, dtype=torch.int32)},
+            "red_guess": {"word": ["INVALIDWORD"]},  # Invalid word but red is inactive
+            "blue_spy": {"clue": [""], "clue_number": torch.zeros(batch_size, dtype=torch.int32)},
+            "blue_guess": {"word": [valid_word]},  # Valid word
+        }
+
+    # Should not raise ValueError despite invalid word from inactive team
+    obs, rewards, dones, infos = env.step(actions_dict)
+
+    # The valid tile should be revealed
+    assert env.game_state.revealed[0, team_tile_idx], "Valid guess from active team should reveal tile"
+
+
+def test_blue_guesser_tile_index():
+    """Test that blue guesser can use tile_index to make guesses."""
+    batch_size = 1
+    env = WordBatchEnv(batch_size=batch_size, seed=42)
+    env.reset()
+
+    # Force blue team to be active by setting current_team and phase
+    env.game_state.current_team[0] = GameState.BLUE
+    env.game_state.phase[0] = GameState.GUESSER_PHASE
+    env.game_state.remaining_guesses[0] = 1
+    env.game_state.current_clue_number[0] = 1
+
+    # Find a blue team tile
+    blue_tile_idx = torch.where(env.game_state.colors[0] == GameState.BLUE)[0][0].item()
+
+    # Blue guesser provides tile_index, red provides dummy action
+    actions_dict = {
+        "red_spy": {"clue": [""], "clue_number": torch.zeros(batch_size, dtype=torch.int32)},
+        "red_guess": {"tile_index": torch.tensor([0])},
+        "blue_spy": {"clue": [""], "clue_number": torch.zeros(batch_size, dtype=torch.int32)},
+        "blue_guess": {"tile_index": torch.tensor([blue_tile_idx])},
+    }
+
+    obs, rewards, dones, infos = env.step(actions_dict)
+
+    # The blue tile should be revealed
+    assert env.game_state.revealed[0, blue_tile_idx], f"Blue tile at index {blue_tile_idx} should be revealed"
+
+    # Blue team should receive positive reward for revealing their tile
+    assert rewards["blue_spy"][0] > 0, "Blue spymaster should receive positive reward"
+    assert rewards["blue_guess"][0] > 0, "Blue guesser should receive positive reward"
+
+
 def test_finished_game_preserves_clues():
     """Test that finished games preserve clues instead of zeroing them."""
     env = WordBatchEnv(batch_size=2, seed=42)

@@ -297,8 +297,9 @@ class WordBatchEnv:
             word_list = red_guess_actions["word"]
             if isinstance(word_list, list):
                 for b in range(min(len(word_list), self.batch_size)):
-                    word = word_list[b]
-                    red_indices[b] = self._word_to_index(b, word)
+                    if not active_masks["red_guess"][b]:
+                        continue
+                    red_indices[b] = self._word_to_index(b, word_list[b])
         elif "tile_index" in red_guess_actions:
             idx_array = red_guess_actions["tile_index"]
             if isinstance(idx_array, torch.Tensor):
@@ -311,8 +312,15 @@ class WordBatchEnv:
             word_list = blue_guess_actions["word"]
             if isinstance(word_list, list):
                 for b in range(min(len(word_list), self.batch_size)):
-                    word = word_list[b]
-                    blue_indices[b] = self._word_to_index(b, word)
+                    if not active_masks["blue_guess"][b]:
+                        continue
+                    blue_indices[b] = self._word_to_index(b, word_list[b])
+        elif "tile_index" in blue_guess_actions:
+            idx_array = blue_guess_actions["tile_index"]
+            if isinstance(idx_array, torch.Tensor):
+                blue_indices = idx_array.to(self.device).to(torch.int32)
+            else:
+                blue_indices = torch.tensor(idx_array, dtype=torch.int32, device=self.device)
 
         # Vectorized selection based on active masks
         tile_indices = torch.where(

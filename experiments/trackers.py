@@ -212,6 +212,15 @@ class SummaryTracker(BaseBatchTracker, GameTracker):
         final_infos: dict[str, Any]
     ) -> None:
         """Update episode statistics."""
+        # Initialize agent_ids if not already done (handles max_turns=0 case)
+        if not self._initialized and final_infos:
+            self.agent_ids = list(final_infos.keys())
+            self._initialized = True
+            for agent_id in self.agent_ids:
+                self.total_rewards[agent_id] = 0.0
+                self.reward_sum_sq[agent_id] = 0.0
+                self.current_episode_rewards[agent_id] = 0.0
+
         # Update per-episode reward statistics (before incrementing games)
         for agent_id in self.agent_ids:
             episode_total = self.current_episode_rewards[agent_id]
@@ -339,6 +348,18 @@ class EpisodeTracker(BaseBatchTracker, GameTracker):
         final_infos: dict[str, Any]
     ) -> None:
         """Store episode results and reset for next episode(s)."""
+        # Initialize agent_ids if not already done (handles max_turns=0 case)
+        if not self._initialized and final_infos:
+            self._ensure_initialized(final_infos)
+            # Determine batch size from final_infos
+            first_info = next(iter(final_infos.values()))
+            winner_arr = _to_numpy(first_info['winner'])
+            batch_size = len(winner_arr) if hasattr(winner_arr, '__len__') else 1
+            # Initialize per-game accumulators
+            self.current_episode_rewards = {
+                agent_id: np.zeros(batch_size) for agent_id in self.agent_ids
+            }
+
         # Iterate over each game in batch using base class utility
         for idx, (winner, turns) in enumerate(self._iter_batch_infos(final_infos)):
             # Extract rewards for this game
@@ -456,6 +477,11 @@ class TrajectoryTracker(BaseBatchTracker, GameTracker):
         final_infos: dict[str, Any]
     ) -> None:
         """Store complete trajectory and reset for next episode."""
+        # Initialize agent_ids if not already done (handles max_turns=0 case)
+        if not self._initialized and final_infos:
+            self.agent_ids = list(final_infos.keys())
+            self._initialized = True
+
         # Use base class utility to get winner and turns (takes first from batch)
         for winner, turns in self._iter_batch_infos(final_infos):
             # Store episode with trajectory (only first game if batched)
