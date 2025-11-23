@@ -1,0 +1,92 @@
+[
+  {
+    "params": {
+      "n_candidate_clues": 5
+    },
+    "seed": 42,
+    "results": {
+      "total_games": 56,
+      "red_win_rate": 0.6785714285714286,
+      "blue_win_rate": 0.32142857142857145,
+      "avg_turns": 8.678571428571429,
+      "rewards_per_agent": {
+        "red_spy": -1.5357142857142858,
+        "red_guess": -1.7321428571428572,
+        "blue_spy": -0.3392857142857143,
+        "blue_guess": -9.321428571428571
+      }
+    }
+  },
+  {
+    "params": {
+      "n_candidate_clues": 10
+    },
+    "seed": 10042,
+    "results": {
+      "total_games": 56,
+      "red_win_rate": 0.5892857142857143,
+      "blue_win_rate": 0.4107142857142857,
+      "avg_turns": 9.678571428571429,
+      "rewards_per_agent": {
+        "red_spy": -0.39285714285714285,
+        "red_guess": -3.2142857142857144,
+        "blue_spy": 0.0,
+        "blue_guess": -6.482142857142857
+      }
+    }
+  },
+  {
+    "params": {
+      "n_candidate_clues": 20
+    },
+    "seed": 20042,
+    "results": {
+      "total_games": 56,
+      "red_win_rate": 0.4107142857142857,
+      "blue_win_rate": 0.5892857142857143,
+      "avg_turns": 10.125,
+      "rewards_per_agent": {
+        "red_spy": -0.16071428571428573,
+        "red_guess": -5.196428571428571,
+        "blue_spy": -0.75,
+        "blue_guess": -1.3928571428571428
+      }
+    }
+  },
+  {
+    "params": {
+      "n_candidate_clues": 50
+    },
+    "seed": 30042,
+    "results": {
+      "total_games": 56,
+      "red_win_rate": 0.5714285714285714,
+      "blue_win_rate": 0.42857142857142855,
+      "avg_turns": 9.410714285714286,
+      "rewards_per_agent": {
+        "red_spy": -0.4107142857142857,
+        "red_guess": -0.2857142857142857,
+        "blue_spy": -0.7678571428571429,
+        "blue_guess": -2.1964285714285716
+      }
+    }
+  },
+  {
+    "params": {
+      "n_candidate_clues": 100
+    },
+    "seed": 40042,
+    "results": {
+      "total_games": 56,
+      "red_win_rate": 0.4642857142857143,
+      "blue_win_rate": 0.5357142857142857,
+      "avg_turns": 9.732142857142858,
+      "rewards_per_agent": {
+        "red_spy": -0.05357142857142857,
+        "red_guess": -3.857142857142857,
+        "blue_spy": -0.017857142857142856,
+        "blue_guess": -2.517857142857143
+      }
+    }
+  }
+]
