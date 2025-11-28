@@ -22,27 +22,97 @@ def default_sparse_reward(
     new_state: GameState,
     agent_id: str,
     team_idx: int
-) -> float:
+) -> torch.Tensor:
     """
-    Default sparse reward: +1 for winning, -1 for losing, 0 otherwise.
+    Sparse reward: +1 for winning, -1 for losing, 0 otherwise.
+
+    This is a simple reward function that only gives feedback at game end.
+    Good for evaluation, but may be too sparse for effective RL training.
 
     Args:
         prev_state: GameState before action
         new_state: GameState after action
         agent_id: Agent ID string
-        team_idx: Team index for this agent
+        team_idx: Team index for this agent (0=red, 1=blue)
 
     Returns:
-        Float reward
+        Tensor of shape [B] with rewards for each game in batch
     """
-    # Win reward
-    if new_state.game_over.any() and (new_state.winner == team_idx).any():
-        return 1.0
-    # Loss reward
-    elif new_state.game_over.any() and (new_state.winner != team_idx).any() and (new_state.winner >= 0).any():
-        return -1.0
-    # All other cases
-    return 0.0
+    batch_size = new_state.game_over.shape[0]
+    rewards = torch.zeros(batch_size, device=new_state.game_over.device)
+
+    # Games that just ended (weren't over before, are over now)
+    newly_finished = ~prev_state.game_over & new_state.game_over
+
+    # Win reward (+1)
+    won_games = newly_finished & (new_state.winner == team_idx)
+    rewards[won_games] = 1.0
+
+    # Loss reward (-1) - lost if game ended and winner is not this team (and not a tie)
+    lost_games = newly_finished & (new_state.winner != team_idx) & (new_state.winner >= 0)
+    rewards[lost_games] = -1.0
+
+    return rewards
+
+
+def default_dense_reward(
+    prev_state: GameState,
+    new_state: GameState,
+    agent_id: str,
+    team_idx: int
+) -> torch.Tensor:
+    """
+    Dense reward function (default): provides feedback during gameplay.
+
+    Rewards:
+    - +1 for each own team tile revealed
+    - -1 for each opponent tile revealed
+    - -10 for assassin
+    - +10 for winning
+    - -10 for losing
+
+    Better for RL training as it provides more learning signal.
+
+    Args:
+        prev_state: GameState before action
+        new_state: GameState after action
+        agent_id: Agent ID string
+        team_idx: Team index for this agent (0=red, 1=blue)
+
+    Returns:
+        Tensor of shape [B] with rewards for each game in batch
+    """
+    batch_size = new_state.game_over.shape[0]
+    device = new_state.game_over.device
+    rewards = torch.zeros(batch_size, device=device)
+
+    # Determine opponent team
+    opponent_idx = 1 - team_idx
+
+    # Tiles revealed this step
+    revealed_diff = new_state.revealed & ~prev_state.revealed
+
+    # Team tiles revealed (+1 each)
+    team_tiles = (new_state.colors == team_idx) & revealed_diff
+    rewards += team_tiles.sum(dim=1).float()
+
+    # Opponent tiles revealed (-1 each)
+    opp_tiles = (new_state.colors == opponent_idx) & revealed_diff
+    rewards -= opp_tiles.sum(dim=1).float()
+
+    # Assassin revealed (-10)
+    assassin_tiles = (new_state.colors == 3) & revealed_diff
+    rewards -= 10.0 * assassin_tiles.sum(dim=1).float()
+
+    # Game end rewards
+    newly_finished = ~prev_state.game_over & new_state.game_over
+    won_games = newly_finished & (new_state.winner == team_idx)
+    lost_games = newly_finished & (new_state.winner != team_idx) & (new_state.winner >= 0)
+
+    rewards += 10.0 * won_games.float()
+    rewards -= 10.0 * lost_games.float()
+
+    return rewards
 
 
 class WordBatchEnv:
@@ -103,7 +173,7 @@ class WordBatchEnv:
         self.batch_size = batch_size
         self.board_size = board_size
         self.reality_layer = reality_layer
-        self.reward_fn = reward_fn or default_sparse_reward
+        self.reward_fn = reward_fn or default_dense_reward
 
         # Use provided word pool or default
         self.word_pool = word_pool if word_pool is not None else WORD_POOL
@@ -332,72 +402,57 @@ class WordBatchEnv:
         # Track game state before guess
         prev_game_over = self.game_state.game_over.clone()
 
+        # Create snapshot of previous state for reward calculation
+        prev_state = GameState(batch_size=self.batch_size, board_size=self.board_size, device=self.device)
+        prev_state.colors = self.game_state.colors.clone()
+        prev_state.revealed = self.game_state.revealed.clone()
+        prev_state.current_team = self.game_state.current_team.clone()
+        prev_state.phase = self.game_state.phase.clone()
+        prev_state.game_over = self.game_state.game_over.clone()
+        prev_state.winner = self.game_state.winner.clone()
+        prev_state.turn_count = self.game_state.turn_count.clone()
+        prev_state.remaining_guesses = self.game_state.remaining_guesses.clone()
+        prev_state.current_clue_number = self.game_state.current_clue_number.clone()
+
         # Apply guess
         self.game_state.guess(tile_indices)
 
         # Calculate rewards
-        rewards = self._calculate_rewards(prev_counts, prev_game_over)
+        rewards = self._calculate_rewards(prev_state, prev_counts, prev_game_over)
 
         return rewards
 
-    def _calculate_rewards(self, prev_counts: dict, prev_game_over: torch.Tensor) -> dict:
+    def _calculate_rewards(self, prev_state: GameState, prev_counts: dict, prev_game_over: torch.Tensor) -> dict:
         """
         Calculate rewards for each agent based on state changes.
 
-        Uses the configured reward_fn if provided, otherwise uses default sparse rewards.
+        Uses the configured reward_fn to compute rewards. The reward_fn receives
+        the previous and current game states and must return a tensor of shape [B].
 
         Args:
+            prev_state: Complete game state before action
             prev_counts: Unrevealed counts before action
             prev_game_over: Game over status before action
 
         Returns:
             Dictionary mapping agent_id to rewards [B]
         """
-        new_counts = self.game_state.get_unrevealed_counts()
-
         rewards = {}
 
-        # Track which games just finished (not already finished)
-        newly_finished = ~prev_game_over & self.game_state.game_over
-
         for agent_id in self.agent_ids:
-            agent_rewards = torch.zeros(self.batch_size, device=self.device)
-
             # Determine team for this agent
             if "red" in agent_id:
-                team_key = "red"
                 team_idx = GameState.RED
-                opponent_key = "blue"
             else:
-                team_key = "blue"
                 team_idx = GameState.BLUE
-                opponent_key = "red"
 
-            # Default reward structure (will be used if reward_fn not provided):
-            # +1 for revealing own team tile
-            # -1 for revealing opponent tile
-            # -10 for revealing assassin
-            # +10 for winning
-            # -10 for losing
-
-            # Team tile revealed
-            team_revealed = prev_counts[team_key] - new_counts[team_key]
-            agent_rewards += team_revealed.to(torch.float32)
-
-            # Opponent tile revealed
-            opp_revealed = prev_counts[opponent_key] - new_counts[opponent_key]
-            agent_rewards -= opp_revealed.to(torch.float32)
-
-            # Assassin revealed
-            assassin_revealed = prev_counts["assassin"] - new_counts["assassin"]
-            agent_rewards -= 10 * assassin_revealed.to(torch.float32)
-
-            # Game end rewards (only for newly finished games)
-            won_games = newly_finished & (self.game_state.winner == team_idx)
-            lost_games = newly_finished & (self.game_state.winner != team_idx) & (self.game_state.winner >= 0)
-
-            agent_rewards += 10 * won_games.to(torch.float32)
-            agent_rewards -= 10 * lost_games.to(torch.float32)
+            # Call custom reward function
+            agent_rewards = self.reward_fn(
+                prev_state=prev_state,
+                new_state=self.game_state,
+                agent_id=agent_id,
+                team_idx=team_idx
+            )
 
             rewards[agent_id] = agent_rewards
 

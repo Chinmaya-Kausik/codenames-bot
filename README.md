@@ -1,193 +1,281 @@
 # Codenames Bot
 
-Multi-agent Codenames environment with support for LLM and deep RL agents.
+**Multi-agent Codenames environment for deep reinforcement learning and LLM research.**
 
-## Overview
+[![Tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)]() [![Python](https://img.shields.io/badge/python-3.8%2B-blue)]() [![PyTorch](https://img.shields.io/badge/pytorch-2.0%2B-orange)]()
 
-This project provides a complete multi-agent implementation of the board game Codenames, designed for:
-- **Deep reinforcement learning research**: Vectorized environments with batched execution
-- **LLM agent development**: Word-based environments compatible with language models
-- **Hybrid agent systems**: Reality layer for mixing continuous and discrete agents
-- **Parameter optimization**: Built-in experiment framework with tracking and sweeps
+## Table of Contents
+- [What is This?](#what-is-this)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+- [Examples](#examples)
+- [Notebooks](#notebooks)
+- [Architecture](#architecture)
+- [GPU Acceleration](#gpu-acceleration)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Troubleshooting](#troubleshooting)
+- [Citation](#citation)
+
+## What is This?
+
+This repository provides a complete multi-agent implementation of the board game [Codenames](https://en.wikipedia.org/wiki/Codenames_(board_game)), designed specifically for AI research. Whether you're training deep RL agents, building LLM-based players, or researching multi-agent coordination, this environment provides the tools you need.
+
+### What is Codenames?
+
+Codenames is a word-guessing game where two teams compete:
+- **Spymasters** give one-word clues to help their team identify specific words on a 5×5 grid
+- **Guessers** try to identify their team's words based on the clue
+- **Goal**: Be the first team to reveal all your words, while avoiding the assassin word (instant loss!)
+
+**Example Turn:**
+```
+Board: [TREE, RIVER, MOON, BANK, FIRE, ...]
+Red Spymaster (knows TREE and RIVER are red): "NATURE 2"
+Red Guesser: *selects TREE* ✓ *selects RIVER* ✓
+```
+
+### Why This Implementation?
+
+✨ **For Researchers:**
+- Batched execution: Train on 1000s of parallel games
+- GPU acceleration: Full PyTorch implementation
+- Flexible rewards: Customize for your training objective
+- Multiple representations: Words (LLMs) or vectors (neural nets)
+
+✨ **For Developers:**
+- Clean multi-agent API: Standard gym-like interface
+- 128 passing tests: Reliable and well-tested
+- Comprehensive docs: Examples, notebooks, and guides
+- Extensible: Easy to add custom agents and rewards
 
 ## Key Features
 
-- ✅ **Multi-agent API**: Fixed agent IDs for spymasters and guessers on both teams
-- ✅ **Dual representations**: Word-based (LLMs) and vector-based (neural networks)
-- ✅ **Batched execution**: Run multiple games in parallel for efficient training
-- ✅ **Reality layer**: Optional vocabulary snapping for continuous→discrete conversion
-- ✅ **Flexible rewards**: Customizable reward functions (default: sparse win/loss)
-- ✅ **Experiment framework**: Parameter sweeps, tracking, and visualization
-- ✅ **128 passing tests**: Comprehensive test coverage across all modules
+| Feature | Description |
+|---------|-------------|
+| 🎮 **Multi-Agent API** | Standard interface with 4 agents per game (2 spymasters + 2 guessers) |
+| 🔄 **Dual Environments** | `WordBatchEnv` (LLMs) and `VectorBatchEnv` (neural networks) |
+| ⚡ **GPU Accelerated** | Full PyTorch with CUDA/MPS/CPU support |
+| 🚀 **Batched Execution** | Run 128 games in parallel, 18.9x faster than single-game |
+| 🎯 **Custom Rewards** | Plug in your own reward functions |
+| 📊 **Experiment Framework** | Built-in tracking, parameter sweeps, and visualization |
+| 🧪 **Well-Tested** | 128 tests with >85% coverage across all modules |
+| 📓 **Interactive Demos** | 4 Jupyter notebooks to get started |
 
-## Architecture
+## Installation
 
+### Requirements
+- Python 3.8+
+- PyTorch 2.0+
+- CUDA (optional, for NVIDIA GPUs)
+- MPS (automatic, for Apple Silicon)
+
+### Basic Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/codenames-bot.git
+cd codenames-bot
+
+# Install core dependencies
+pip install torch numpy pytest
+
+# Optional: Install for embedding-based agents (recommended)
+pip install sentence-transformers
+
+# Verify installation
+python -m pytest tests/ -v
 ```
-codenames-bot/
-├── core/                  # Shared game logic (representation-agnostic)
-│   ├── game_state.py     # Batched game state management
-│   ├── clue_vocab.py     # Clue vocabulary for reality layer
-│   └── reality_layer.py  # Optional vocab snapping
-│
-├── views/                 # Representation mappings
-│   ├── word_view.py      # Tile ID ↔ word mapping
-│   └── vector_view.py    # Tile ID ↔ embedding mapping
-│
-├── envs/                  # Multi-agent environments
-│   ├── word_batch_env.py # Word-based (for LLMs/humans)
-│   ├── vector_batch_env.py # Vector-based (for deep RL)
-│   └── wrappers/
-│       └── single_agent_wrapper.py # Single-agent training wrapper
-│
-├── agents/                # Agent implementations
-│   ├── spymaster/        # Spymaster agents (give clues)
-│   │   ├── base_spymaster.py
-│   │   ├── random_spymaster.py
-│   │   └── embedding_spymaster.py
-│   └── guesser/          # Guesser agents (select tiles)
-│       ├── base_guesser.py
-│       ├── random_guesser.py
-│       └── embedding_guesser.py
-│
-├── experiments/           # Experiment orchestration
-│   ├── trackers.py       # Data collection (Summary, Episode, Trajectory)
-│   └── multi_agent_experiment.py # Experiment runner
-│
-├── tests/                 # Unit tests (128 tests)
-├── notebooks/             # Interactive demos (4 notebooks)
-└── utils/                 # Utilities
-    └── wordlist.py       # Word pools
+
+### Development Installation
+
+```bash
+# Install with dev dependencies
+pip install torch numpy pytest sentence-transformers matplotlib pandas seaborn scipy jupyter
+
+# Run tests
+python -m pytest tests/ -v
+
+# Run GPU benchmark
+python benchmark_gpu.py
 ```
 
 ## Quick Start
 
-### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/codenames-bot.git
-cd codenames-bot
-
-# Install dependencies
-pip install numpy sentence-transformers pytest torch
-
-# Run tests
-python3 -m pytest tests/ -v
-```
-
-### GPU Acceleration
-
-**The entire codebase uses PyTorch** with automatic GPU acceleration:
-
-- ✅ **CUDA** (NVIDIA GPUs)
-- ✅ **MPS** (Apple Silicon M1/M2/M3)
-- ✅ **CPU** fallback
-
-All components run on the same device for zero-copy performance:
-- **Core game state** (PyTorch tensors)
-- **Environments** (batched tensor operations)
-- **Agents** (embedding models and inference)
-- **Views** (vector/word representations)
-
-**Performance (Apple M2 Pro, MPS):**
-```
-Batch Size | Games/sec  | Speedup vs B=1
------------+------------+----------------
-    1      |    100     |     1.0x
-   32      |   1,200    |    12.0x
-  128      |   1,892    |    18.9x
-```
-
-**Key Benefits:**
-- Zero CPU↔GPU transfers during training
-- Full batched tensor operations throughout
-- Optimal GPU utilization at larger batch sizes
-
-**Device Management:**
-```python
-# Automatic device detection
-from utils.device import get_device
-device = get_device()  # Returns cuda/mps/cpu
-
-# Or specify manually
-env = WordBatchEnv(batch_size=32, device="cuda")
-```
-
-**Design Rationale:**
-- **Core & Environments**: PyTorch tensors for batched game logic on GPU
-- **Agents**: PyTorch models for inference on same device
-- **Trackers**: Convert to NumPy for CPU-side analysis (plotting, saving, statistics)
-
-This design keeps compute-intensive operations on GPU while moving results to CPU only at the experiment interface.
-
-### Word-based Environment (for LLMs)
+### 30-Second Example
 
 ```python
 from envs.word_batch_env import WordBatchEnv
 from agents.spymaster import RandomSpymaster
 from agents.guesser import RandomGuesser
 
-# Create environment
+# Create environment (1 game)
 env = WordBatchEnv(batch_size=1, seed=42)
 
-# Create agents
-red_spy = RandomSpymaster(team="red")
-red_guess = RandomGuesser(team="red")
-blue_spy = RandomSpymaster(team="blue")
-blue_guess = RandomGuesser(team="blue")
+# Create agents for both teams
+agents = {
+    "red_spy": RandomSpymaster(team="red"),
+    "red_guess": RandomGuesser(team="red"),
+    "blue_spy": RandomSpymaster(team="blue"),
+    "blue_guess": RandomGuesser(team="blue"),
+}
 
-# Reset environment
+# Play a game!
 obs_dict = env.reset()
-
-# Game loop
 for turn in range(50):
     if env.game_state.game_over[0]:
         break
 
     # Get actions from all agents
-    actions_dict = {
-        "red_spy": red_spy.get_clue(obs_dict["red_spy"]),
-        "red_guess": red_guess.get_guess(obs_dict["red_guess"]),
-        "blue_spy": blue_spy.get_clue(obs_dict["blue_spy"]),
-        "blue_guess": blue_guess.get_guess(obs_dict["blue_guess"]),
-    }
+    actions = {aid: agent.get_clue(obs_dict[aid]) if 'spy' in aid else agent.get_guess(obs_dict[aid])
+               for aid, agent in agents.items()}
 
     # Step environment
-    obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
+    obs_dict, rewards, dones, infos = env.step(actions)
 
-# Check winner
-winner = infos_dict['red_spy']['winner'][0]
-print(f"Winner: {'Red' if winner == 0 else 'Blue' if winner == 1 else 'None'}")
+# Check who won!
+winner = infos['red_spy']['winner'][0]
+print(f"Winner: {'Red' if winner == 0 else 'Blue' if winner == 1 else 'Draw'}")
 ```
 
-### Vector-based Environment (for Deep RL)
+## Core Concepts
 
+### 1. Environments
+
+Two environment types with identical API:
+
+**WordBatchEnv** - For LLMs and human-readable games
+```python
+from envs.word_batch_env import WordBatchEnv
+
+env = WordBatchEnv(batch_size=8, seed=42)  # 8 parallel games
+obs = env.reset()  # obs['red_spy']['words'] = ["TREE", "RIVER", ...]
+```
+
+**VectorBatchEnv** - For neural networks
 ```python
 from envs.vector_batch_env import VectorBatchEnv
-from core.reality_layer import create_reality_layer_from_random
 
-# Create reality layer (optional)
-reality_layer = create_reality_layer_from_random(
-    vocab_size=1000,
-    embedding_dim=384,
-    seed=42
-)
-
-# Create environment with batching
-env = VectorBatchEnv(
-    batch_size=32,  # 32 parallel games
-    reality_layer=reality_layer,
-    seed=42
-)
-
-# ... training loop with neural network policies
+env = VectorBatchEnv(batch_size=32, seed=42)  # 32 parallel games
+obs = env.reset()  # obs['red_spy']['board_vectors'].shape = [32, 25, 384]
 ```
 
-### Running Experiments
+### 2. Agents
+
+Four agent IDs per game:
+- `red_spy` - Red team spymaster (gives clues)
+- `red_guess` - Red team guesser (selects tiles)
+- `blue_spy` - Blue team spymaster
+- `blue_guess` - Blue team guesser
+
+**Built-in Agents:**
+- `RandomSpymaster` / `RandomGuesser` - Random baseline
+- `EmbeddingSpymaster` / `EmbeddingGuesser` - Semantic similarity-based
+
+### 3. Observations
+
+Agents receive role-specific observations:
+
+```python
+# Spymaster observation
+{
+    "words": List[List[str]],           # Board words
+    "colors": Tensor[B, 25],            # Tile colors (RED=0, BLUE=1, NEUTRAL=2, ASSASSIN=3)
+    "revealed": Tensor[B, 25],          # Already revealed tiles
+    "role_encoding": Tensor[B, 4],      # [is_red, is_blue, is_spy, is_guesser]
+    ...
+}
+
+# Guesser observation (no colors!)
+{
+    "words": List[List[str]],           # Board words
+    "revealed": Tensor[B, 25],          # Already revealed tiles
+    "current_clue": List[str],          # Current clue from spymaster
+    "current_clue_number": Tensor[B],   # Number of words for clue
+    "remaining_guesses": Tensor[B],     # Guesses left this turn
+    ...
+}
+```
+
+### 4. Actions
+
+```python
+# Spymaster action (give clue)
+action = {
+    "clue": ["NATURE"],                 # One-word clue
+    "clue_number": torch.tensor([2])    # Number of related words
+}
+
+# Guesser action (select tile)
+action = {
+    "tile_index": torch.tensor([5])     # Index 0-24
+}
+# Or word-based (WordBatchEnv only):
+action = {
+    "word": ["TREE"]                    # Select by word
+}
+```
+
+### 5. Rewards
+
+**Default: Dense rewards** (good for RL training)
+- +1 per own team tile revealed
+- -1 per opponent tile revealed
+- -10 for assassin
+- +10 for winning, -10 for losing
+
+**Alternative: Sparse rewards** (simpler, but harder to learn)
+```python
+from envs.word_batch_env import default_sparse_reward
+
+env = WordBatchEnv(batch_size=8, reward_fn=default_sparse_reward)
+# Only gives +1 for win, -1 for loss, 0 otherwise
+```
+
+**Custom reward functions:**
+```python
+import torch
+from core.game_state import GameState
+
+def my_custom_reward(prev_state: GameState, new_state: GameState,
+                     agent_id: str, team_idx: int) -> torch.Tensor:
+    """
+    Custom reward function - must return tensor of shape [B].
+
+    Args:
+        prev_state: GameState before action
+        new_state: GameState after action
+        agent_id: Agent ID (e.g., "red_spy")
+        team_idx: Team index (0=red, 1=blue)
+
+    Returns:
+        Tensor[B] of rewards for each game in batch
+    """
+    batch_size = new_state.game_over.shape[0]
+    rewards = torch.zeros(batch_size, device=new_state.game_over.device)
+
+    # Your custom reward logic here
+    # Example: Big bonus for winning
+    newly_finished = ~prev_state.game_over & new_state.game_over
+    won_games = newly_finished & (new_state.winner == team_idx)
+    rewards[won_games] = 100.0
+
+    return rewards
+
+env = WordBatchEnv(batch_size=8, reward_fn=my_custom_reward)
+```
+
+## Examples
+
+### Example 1: Run 100 Games and Track Win Rates
 
 ```python
 from experiments import MultiAgentCodenamesExperiment, SummaryTracker
 from envs.word_batch_env import WordBatchEnv
+from agents.spymaster import RandomSpymaster
+from agents.guesser import RandomGuesser
 
 # Create experiment
 exp = MultiAgentCodenamesExperiment(
@@ -195,15 +283,15 @@ exp = MultiAgentCodenamesExperiment(
     max_turns=50
 )
 
-# Define policy map
+# Define policies
 policy_map = {
-    "red_spy": lambda obs: red_spy.get_clue(obs),
-    "red_guess": lambda obs: red_guess.get_guess(obs),
-    "blue_spy": lambda obs: blue_spy.get_clue(obs),
-    "blue_guess": lambda obs: blue_guess.get_guess(obs),
+    "red_spy": lambda obs: RandomSpymaster(team="red").get_clue(obs),
+    "red_guess": lambda obs: RandomGuesser(team="red").get_guess(obs),
+    "blue_spy": lambda obs: RandomSpymaster(team="blue").get_clue(obs),
+    "blue_guess": lambda obs: RandomGuesser(team="blue").get_guess(obs),
 }
 
-# Run games with tracking
+# Run with tracking
 tracker = SummaryTracker()
 results = exp.run_games(
     policy_map=policy_map,
@@ -213,182 +301,74 @@ results = exp.run_games(
     verbose=True
 )
 
-print(f"Red win rate: {results['red_win_rate']:.2%}")
-print(f"Average turns: {results['avg_turns']:.1f}")
+print(f"Red win rate: {results['red_win_rate']:.1%}")
+print(f"Blue win rate: {results['blue_win_rate']:.1%}")
+print(f"Average game length: {results['avg_turns']:.1f} turns")
 ```
 
-### Single-Agent Training
+### Example 2: Train a Single Agent with RL
 
 ```python
 from envs.wrappers import SingleAgentWrapper
+from envs.word_batch_env import WordBatchEnv
+import numpy as np
 
 # Wrap environment to focus on training red_guess
 env = SingleAgentWrapper(
     env=WordBatchEnv(batch_size=4, seed=42),
-    agent_id="red_guess",  # Focus on this agent
+    agent_id="red_guess",  # Only control this agent
     policy_map={
-        "red_spy": lambda obs: red_spy.get_clue(obs),
-        "blue_spy": lambda obs: blue_spy.get_clue(obs),
-        "blue_guess": lambda obs: blue_guess.get_guess(obs),
+        "red_spy": lambda obs: RandomSpymaster(team="red").get_clue(obs),
+        "blue_spy": lambda obs: RandomSpymaster(team="blue").get_clue(obs),
+        "blue_guess": lambda obs: RandomGuesser(team="blue").get_guess(obs),
     }
 )
 
-# Standard single-agent RL interface
+# Standard RL training loop
 obs = env.reset()
-obs, reward, done, info = env.step(action)  # Only red_guess's action needed
+for step in range(1000):
+    # Your RL policy here
+    action = {"tile_index": np.array([np.random.randint(0, 25) for _ in range(4)])}
+
+    obs, reward, done, info = env.step(action)
+
+    # Train your agent with (obs, action, reward, done)
+    # ...
 ```
 
-## Multi-Agent API
-
-Both `WordBatchEnv` and `VectorBatchEnv` expose the same multi-agent interface:
-
-### Agent IDs
-Fixed agent IDs: `["red_spy", "red_guess", "blue_spy", "blue_guess"]`
-
-### Reset
-```python
-obs_dict: dict[str, dict] = env.reset(seed=42)
-# Returns observations for all four agents
-```
-
-### Step
-```python
-import torch
-
-actions_dict = {
-    "red_spy": {"clue": ["FIRE"], "clue_number": torch.tensor([2], dtype=torch.int32)},
-    "red_guess": {"tile_index": torch.tensor([5], dtype=torch.int32)},
-    "blue_spy": {"clue": ["WATER"], "clue_number": torch.tensor([3], dtype=torch.int32)},
-    "blue_guess": {"tile_index": torch.tensor([12], dtype=torch.int32)},
-}
-
-obs_dict, rewards_dict, dones_dict, infos_dict = env.step(actions_dict)
-```
-
-### Turn-Based Execution
-- Only ONE agent is active per game per step
-- Active agents determined by game phase (spymaster vs guesser) and current team
-- Inactive agents' actions are ignored, and they receive zero reward
-- Check active agents with: `env.game_state.get_active_agent_masks()`
-
-### Role-Aware Observations
-Each agent receives different observations:
-- **Spymasters** see board colors (know which tiles belong to which team)
-- **Guessers** see current clue and remaining guesses (don't see colors)
-- All agents see: revealed tiles, role encoding, current team, phase
-
-## Custom Rewards
-
-Both environments support custom reward functions:
+### Example 3: Parameter Sweep for Agent Optimization
 
 ```python
-import torch
+from experiments import MultiAgentCodenamesExperiment, EpisodeTracker
+from agents.spymaster import EmbeddingSpymaster, SpymasterParams
+from agents.guesser import EmbeddingGuesser, GuesserParams
 
-def custom_reward_fn(prev_state, new_state, agent_id, team_idx):
-    """
-    Custom reward function.
-
-    Args:
-        prev_state: GameState before action (PyTorch tensors)
-        new_state: GameState after action (PyTorch tensors)
-        agent_id: Agent ID (e.g., "red_spy")
-        team_idx: Team index (0=red, 1=blue)
-
-    Returns:
-        Float reward
-    """
-    # Win reward
-    if new_state.game_over and new_state.winner == team_idx:
-        return 1.0
-
-    # Dense shaping: reward for revealing team tiles
-    revealed_diff = new_state.revealed - prev_state.revealed
-    team_tiles_revealed = torch.sum(revealed_diff & (new_state.colors == team_idx))
-
-    return 0.1 * team_tiles_revealed.item()
-
-# Use in environment
-env = WordBatchEnv(batch_size=32, reward_fn=custom_reward_fn)
-```
-
-**Note**: All GameState attributes are now PyTorch tensors. Use `.item()` to extract Python scalars when needed.
-
-## Reality Layer
-
-The reality layer bridges continuous neural network outputs and discrete vocabulary:
-
-```python
-from core.reality_layer import create_reality_layer_from_random
-
-# Create reality layer with 1000-word vocabulary
-reality_layer = create_reality_layer_from_random(
-    vocab_size=1000,
-    embedding_dim=384,
-    seed=42
+# Create experiment
+exp = MultiAgentCodenamesExperiment(
+    env_factory=lambda seed: WordBatchEnv(batch_size=8, seed=seed),
+    max_turns=50
 )
 
-# Use in environment
-env = VectorBatchEnv(batch_size=32, reality_layer=reality_layer)
-
-# Neural agent outputs continuous vector
-clue_vector = neural_net(obs)  # Shape: [B, 384]
-
-# Reality layer snaps to nearest vocabulary word
-# Environment automatically handles this when reality_layer is provided
-```
-
-**Benefits:**
-- Preserves combinatorial hardness of word selection
-- Enables hybrid LLM + neural agent play
-- Can be toggled on/off for speed vs. realism tradeoff
-
-## Experiment Framework
-
-### Trackers
-
-Three pre-built tracker types for data collection:
-
-#### SummaryTracker (O(1) memory)
-Computes aggregate statistics: win rates, average rewards, game length
-```python
-tracker = SummaryTracker()
-results = exp.run_games(policy_map, n_games=100, tracker=tracker)
-# Returns: {total_games, red_win_rate, blue_win_rate, avg_turns, rewards_per_agent}
-```
-
-#### EpisodeTracker (O(n_games) memory)
-Stores per-episode results: total rewards, winner, turns
-```python
-tracker = EpisodeTracker()
-episodes = exp.run_games(policy_map, n_games=50, tracker=tracker)
-# Returns: list of episode dicts
-```
-
-#### TrajectoryTracker (O(n_games × n_steps) memory)
-Stores full step-by-step data: observations, actions, rewards
-```python
-tracker = TrajectoryTracker(store_observations=True, store_actions=True)
-trajectories = exp.run_games(policy_map, n_games=10, tracker=tracker)
-# Returns: list of trajectory dicts with full step data
-```
-
-### Parameter Sweeps
-
-```python
+# Define policy factory
 def make_policies(params):
-    """Create policy map from parameters."""
-    spy = EmbeddingSpymaster(
-        team="red",
-        params=SpymasterParams(n_candidate_clues=params['n_candidates'])
-    )
-    # ... create other agents
-    return policy_map
+    n_candidates = params['n_candidate_clues']
+    risk = params['risk_tolerance']
 
-# Define parameter grid
+    return {
+        "red_spy": lambda obs: EmbeddingSpymaster(
+            team="red",
+            params=SpymasterParams(n_candidate_clues=n_candidates, risk_tolerance=risk)
+        ).get_clue(obs),
+        "red_guess": lambda obs: EmbeddingGuesser(team="red").get_guess(obs),
+        "blue_spy": lambda obs: EmbeddingSpymaster(team="blue").get_clue(obs),
+        "blue_guess": lambda obs: EmbeddingGuesser(team="blue").get_guess(obs),
+    }
+
+# Parameter grid
 param_grid = [
-    {"n_candidates": 10},
-    {"n_candidates": 50},
-    {"n_candidates": 100},
+    {"n_candidate_clues": 10, "risk_tolerance": 1.0},
+    {"n_candidate_clues": 50, "risk_tolerance": 2.0},
+    {"n_candidate_clues": 100, "risk_tolerance": 3.0},
 ]
 
 # Run sweep
@@ -399,114 +379,177 @@ results = exp.run_sweep(
     seed=42
 )
 
-# Analyze results
+# Analyze
 for r in results:
-    print(f"n_candidates={r['params']['n_candidates']}: "
-          f"red_wr={r['results']['red_win_rate']:.2%}")
+    print(f"n_candidates={r['params']['n_candidate_clues']}, "
+          f"risk={r['params']['risk_tolerance']}: "
+          f"red_wr={r['results']['red_win_rate']:.1%}")
 ```
 
-## Demo Notebooks
+## Notebooks
 
-Explore the `notebooks/` directory for interactive examples:
+Explore the `notebooks/` directory for interactive tutorials:
 
-1. **01_getting_started.ipynb** - Basic environment and agent usage
-2. **02_multi_agent_experiments.ipynb** - Running experiments with trackers
-3. **03_training_single_agent.ipynb** - Using SingleAgentWrapper for RL
-4. **04_parameter_sweeps.ipynb** - Parameter optimization examples
+| Notebook | Description |
+|----------|-------------|
+| [01_getting_started.ipynb](notebooks/01_getting_started.ipynb) | Environment basics, agent creation, game loop |
+| [02_multi_agent_experiments.ipynb](notebooks/02_multi_agent_experiments.ipynb) | Running experiments with trackers |
+| [03_training_single_agent.ipynb](notebooks/03_training_single_agent.ipynb) | Single-agent RL training with wrappers |
+| [04_parameter_sweeps.ipynb](notebooks/04_parameter_sweeps.ipynb) | Systematic parameter optimization |
+
+**To run:**
+```bash
+jupyter notebook notebooks/01_getting_started.ipynb
+```
+
+## Architecture
+
+```
+codenames-bot/
+├── core/                      # 🎯 Core game logic (representation-agnostic)
+│   ├── game_state.py         # Batched game state with PyTorch tensors
+│   ├── clue_vocab.py         # Clue vocabulary management
+│   └── reality_layer.py      # Continuous→discrete conversion
+│
+├── views/                     # 🔍 Representation mappings
+│   ├── word_view.py          # Tile ID ↔ Word string
+│   └── vector_view.py        # Tile ID ↔ Embedding vector
+│
+├── envs/                      # 🎮 Multi-agent environments
+│   ├── word_batch_env.py     # Word-based environment (for LLMs)
+│   ├── vector_batch_env.py   # Vector-based environment (for neural nets)
+│   └── wrappers/
+│       └── single_agent_wrapper.py  # Single-agent training wrapper
+│
+├── agents/                    # 🤖 Agent implementations
+│   ├── spymaster/            # Spymaster agents (give clues)
+│   │   ├── base_spymaster.py
+│   │   ├── random_spymaster.py
+│   │   └── embedding_spymaster.py
+│   └── guesser/              # Guesser agents (select tiles)
+│       ├── base_guesser.py
+│       ├── random_guesser.py
+│       └── embedding_guesser.py
+│
+├── experiments/               # 📊 Experiment orchestration
+│   ├── trackers.py           # Data collection (Summary, Episode, Trajectory)
+│   └── multi_agent_experiment.py  # Experiment runner
+│
+├── utils/                     # 🛠️ Utilities
+│   ├── device.py             # GPU/CPU device management
+│   ├── embeddings.py         # Sentence embedding utilities
+│   └── wordlist.py           # Codenames word pool
+│
+├── tests/                     # ✅ Comprehensive test suite (128 tests)
+├── notebooks/                 # 📓 Interactive demos
+└── docs/                      # 📚 Additional documentation
+```
+
+## GPU Acceleration
+
+**All components use PyTorch for zero-copy GPU acceleration:**
+
+| Component | Device | Benefits |
+|-----------|--------|----------|
+| Game State | GPU | Batched tensor operations |
+| Environments | GPU | Parallel game execution |
+| Embedding Agents | GPU | Fast similarity computations |
+| Views | GPU | Efficient vector lookups |
+
+**Automatic Device Detection:**
+```python
+from utils.device import get_device
+
+device = get_device()  # Returns 'cuda', 'mps', or 'cpu'
+env = WordBatchEnv(batch_size=128, device=device)
+```
+
+**Performance (Apple M2 Pro, MPS):**
+| Batch Size | Games/sec | Speedup vs B=1 |
+|------------|-----------|----------------|
+| 1          | 100       | 1.0x           |
+| 32         | 1,200     | 12.0x          |
+| 128        | 1,892     | 18.9x          |
+
+**Key Insight:** Keep data on GPU during training, only convert to NumPy for analysis.
 
 ## Testing
 
 ```bash
 # Run all tests
-python3 -m pytest tests/ -v
+python -m pytest tests/ -v
 
-# Run specific test file
-python3 -m pytest tests/test_word_batch_env.py -v
+# Run specific module
+python -m pytest tests/test_word_batch_env.py -v
 
-# Run with coverage
-python3 -m pytest tests/ --cov=. --cov-report=html
+# Run with coverage report
+python -m pytest tests/ --cov=. --cov-report=html
+
+# Run GPU benchmark
+python benchmark_gpu.py
 ```
 
 **Test Coverage:**
-- Core modules: 100% (game_state, clue_vocab, reality_layer, views)
-- Environments: >90% (word_batch_env, vector_batch_env)
-- Agents: >80% (spymasters, guessers)
-- Wrappers: >80% (single_agent_wrapper)
-- Experiments: >85% (trackers, experiment runner)
-
-## Design Principles
-
-### Separation of Concerns
-- **Core**: Representation-agnostic game logic
-- **Views**: Tile ID ↔ representation mapping
-- **Envs**: Multi-agent orchestration
-- **Agents**: Policy implementations
-
-### Batching Throughout
-All environments and agents support `batch_size > 1` for efficient parallel execution.
-
-### Configurable Rewards
-Environments accept optional `reward_fn` parameter. Default is sparse (win=+1, loss=-1), but any custom reward function can be provided.
-
-### Reality Layer as Optional
-Can be toggled on/off. When enabled, preserves combinatorial structure while allowing continuous policies.
-
-## Common Patterns
-
-### Agent Action Format
-
-```python
-# Spymaster (word-based)
-action = {"clue": ["FIRE"], "clue_number": torch.tensor([2], dtype=torch.int32)}
-
-# Spymaster (vector-based)
-action = {
-    "clue_vec": torch.tensor([[...], [...]]),  # [B, D]
-    "clue_number": torch.tensor([2, 3], dtype=torch.int32)  # [B]
-}
-
-# Guesser (index-based)
-action = {"tile_index": torch.tensor([5], dtype=torch.int32)}  # [B]
-
-# Guesser (word-based - WordEnv only)
-action = {"word": ["TREE"]}
-```
-
-**Note**: Actions accept both `torch.Tensor` and `numpy.ndarray` (auto-converted), but torch tensors are recommended for zero-copy performance.
-
-### Observation Structure
-
-```python
-obs = {
-    # Common (all torch.Tensor)
-    "revealed": torch.Tensor([B, N], dtype=torch.bool),
-    "role_encoding": torch.Tensor([B, 4]),  # [is_red, is_blue, is_spy, is_guesser]
-    "current_team": torch.Tensor([B], dtype=torch.int32),
-    "phase": torch.Tensor([B], dtype=torch.int32),
-
-    # Spymaster-specific
-    "colors": torch.Tensor([B, N], dtype=torch.int32),  # None for guessers
-
-    # Guesser-specific
-    "current_clue": List[str],  # WordEnv only
-    "current_clue_vec": torch.Tensor([B, D]),  # VectorEnv only
-    "current_clue_number": torch.Tensor([B]),
-    "remaining_guesses": torch.Tensor([B]),
-}
-```
+- Core modules: 100%
+- Environments: >90%
+- Agents: >80%
+- Experiments: >85%
 
 ## Contributing
 
-Contributions welcome! Please:
+We welcome contributions! See [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for detailed guidelines.
+
+**Quick contribution steps:**
 1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Add tests for your changes
+4. Ensure all tests pass (`pytest tests/ -v`)
 5. Submit a pull request
 
-## License
+## Troubleshooting
 
-MIT License - see LICENSE file for details
+### Common Issues
+
+**1. "sentence-transformers not found"**
+```bash
+pip install sentence-transformers
+```
+Note: Only needed for `EmbeddingSpymaster` and `EmbeddingGuesser`. Random agents work without it.
+
+**2. "MPS device not available"**
+- Ensure you have macOS 12.3+ with Apple Silicon
+- Update PyTorch: `pip install --upgrade torch`
+
+**3. "CUDA out of memory"**
+```python
+# Reduce batch size
+env = WordBatchEnv(batch_size=32)  # Instead of 128
+```
+
+**4. "Tests failing on GPU"**
+```bash
+# Force CPU mode for testing
+CUDA_VISIBLE_DEVICES="" python -m pytest tests/ -v
+```
+
+**5. "Notebooks won't run"**
+```bash
+pip install jupyter matplotlib pandas seaborn scipy
+jupyter notebook
+```
+
+### Performance Tips
+
+1. **Use larger batch sizes** for better GPU utilization (128+ recommended)
+2. **Keep data on GPU** - avoid unnecessary `.cpu()` calls
+3. **Use sparse rewards** for faster convergence in RL training
+4. **Disable embedding agents** if you just need fast baselines
+
+### Getting Help
+
+- 📖 Read the [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+- 🐛 [Open an issue](https://github.com/yourusername/codenames-bot/issues)
+- 💬 Check existing issues for solutions
 
 ## Citation
 
@@ -521,8 +564,16 @@ If you use this codebase in your research, please cite:
 }
 ```
 
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
 ## Acknowledgments
 
-- Built on top of the Codenames board game by Vlaada Chvátil
-- Uses sentence-transformers for semantic embedding agents
-- Inspired by OpenAI Gym and PettingZoo multi-agent APIs
+- Built for the board game [Codenames](https://en.wikipedia.org/wiki/Codenames_(board_game)) by Vlaada Chvátil
+- Uses [sentence-transformers](https://www.sbert.net/) for semantic embeddings
+- Inspired by [OpenAI Gym](https://github.com/openai/gym) and [PettingZoo](https://github.com/Farama-Foundation/PettingZoo) multi-agent APIs
+
+---
+
+**Ready to build AI agents that play Codenames?** Start with the [Quick Start](#quick-start) or dive into the [notebooks](notebooks/)! 🚀

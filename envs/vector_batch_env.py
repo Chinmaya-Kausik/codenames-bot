@@ -7,12 +7,13 @@ a multi-agent API with fixed agent IDs for red/blue spymasters and guessers.
 
 from __future__ import annotations
 
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 import torch
 
 from core.game_state import GameState
 from core.reality_layer import RealityLayer
 from views.vector_view import VectorView
+from envs.word_batch_env import default_dense_reward
 
 
 class VectorBatchEnv:
@@ -48,6 +49,7 @@ class VectorBatchEnv:
         board_size: int = 25,
         embedding_dim: int = 384,
         reality_layer: Optional[RealityLayer] = None,
+        reward_fn: Optional[Callable] = None,
         seed: Optional[int] = None,
         device: Optional[torch.device | str] = None
     ):
@@ -59,6 +61,7 @@ class VectorBatchEnv:
             board_size: Number of tiles per board (default 25 for 5x5)
             embedding_dim: Embedding dimension for vectors
             reality_layer: Optional reality layer for clue snapping
+            reward_fn: Optional custom reward function
             seed: Random seed for initialization
             device: Device to store tensors on (cpu/cuda/mps)
         """
@@ -71,6 +74,7 @@ class VectorBatchEnv:
         self.board_size = board_size
         self.embedding_dim = embedding_dim
         self.reality_layer = reality_layer
+        self.reward_fn = reward_fn or default_dense_reward
 
         # Initialize game state
         self.game_state = GameState(
@@ -241,73 +245,57 @@ class VectorBatchEnv:
         prev_team_counts = self.game_state.get_unrevealed_counts()
         prev_game_over = self.game_state.game_over.clone()
 
+        # Create snapshot of previous state for reward calculation
+        prev_state = GameState(batch_size=self.batch_size, board_size=self.board_size, device=self.device)
+        prev_state.colors = self.game_state.colors.clone()
+        prev_state.revealed = self.game_state.revealed.clone()
+        prev_state.current_team = self.game_state.current_team.clone()
+        prev_state.phase = self.game_state.phase.clone()
+        prev_state.game_over = self.game_state.game_over.clone()
+        prev_state.winner = self.game_state.winner.clone()
+        prev_state.turn_count = self.game_state.turn_count.clone()
+        prev_state.remaining_guesses = self.game_state.remaining_guesses.clone()
+        prev_state.current_clue_number = self.game_state.current_clue_number.clone()
+
         # Apply guess
         self.game_state.guess(tile_indices)
 
         # Calculate rewards
-        rewards = self._calculate_rewards(prev_team_counts, prev_game_over)
+        rewards = self._calculate_rewards(prev_state, prev_team_counts, prev_game_over)
 
         return rewards
 
-    def _calculate_rewards(self, prev_counts: dict, prev_game_over: torch.Tensor) -> dict:
+    def _calculate_rewards(self, prev_state: GameState, prev_counts: dict, prev_game_over: torch.Tensor) -> dict:
         """
         Calculate rewards for each agent based on state changes.
 
+        Uses the configured reward_fn to compute rewards. The reward_fn receives
+        the previous and current game states and must return a tensor of shape [B].
+
         Args:
+            prev_state: Complete game state before action
             prev_counts: Unrevealed counts before action
             prev_game_over: Game over status before action
 
         Returns:
             Dictionary mapping agent_id to rewards [B]
         """
-        new_counts = self.game_state.get_unrevealed_counts()
-
         rewards = {}
 
-        # Track which games just finished (not already finished)
-        newly_finished = ~prev_game_over & self.game_state.game_over
-
         for agent_id in self.agent_ids:
-            agent_rewards = torch.zeros(self.batch_size, device=self.device)
-
             # Determine team for this agent
             if "red" in agent_id:
-                team_key = "red"
-                opponent_key = "blue"
+                team_idx = GameState.RED
             else:
-                team_key = "blue"
-                opponent_key = "red"
+                team_idx = GameState.BLUE
 
-            # Reward structure:
-            # +1 for revealing own team tile
-            # -1 for revealing opponent tile
-            # -10 for revealing assassin
-            # +10 for winning
-            # -10 for losing
-
-            # Team tile revealed
-            team_revealed = prev_counts[team_key] - new_counts[team_key]
-            agent_rewards += team_revealed.to(torch.float32)
-
-            # Opponent tile revealed
-            opp_revealed = prev_counts[opponent_key] - new_counts[opponent_key]
-            agent_rewards -= opp_revealed.to(torch.float32)
-
-            # Assassin revealed
-            assassin_revealed = prev_counts["assassin"] - new_counts["assassin"]
-            agent_rewards -= 10 * assassin_revealed.to(torch.float32)
-
-            # Game end rewards (only for newly finished games)
-            if "red" in agent_id:
-                team_code = GameState.RED
-            else:
-                team_code = GameState.BLUE
-
-            won_games = newly_finished & (self.game_state.winner == team_code)
-            lost_games = newly_finished & (self.game_state.winner != team_code) & (self.game_state.winner >= 0)
-
-            agent_rewards += 10 * won_games.to(torch.float32)
-            agent_rewards -= 10 * lost_games.to(torch.float32)
+            # Call custom reward function
+            agent_rewards = self.reward_fn(
+                prev_state=prev_state,
+                new_state=self.game_state,
+                agent_id=agent_id,
+                team_idx=team_idx
+            )
 
             rewards[agent_id] = agent_rewards
 

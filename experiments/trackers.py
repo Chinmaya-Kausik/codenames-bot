@@ -321,17 +321,24 @@ class EpisodeTracker(BaseBatchTracker, GameTracker):
         infos_dict: dict[str, Any]
     ) -> None:
         """Accumulate rewards for current episode(s)."""
-        # Initialize on first step using base class utility
+        # Initialize agent_ids if first time
         if not self._initialized:
             self._ensure_initialized(rewards_dict)
-            # Determine batch size from rewards
-            first_reward = next(iter(rewards_dict.values()))
-            first_reward_np = _to_numpy(first_reward)
-            batch_size = len(first_reward_np) if hasattr(first_reward_np, '__len__') else 1
 
-            # Initialize per-game accumulators
+        # Determine current batch size from rewards
+        first_reward = next(iter(rewards_dict.values()))
+        first_reward_np = _to_numpy(first_reward)
+        current_batch_size = len(first_reward_np) if hasattr(first_reward_np, '__len__') else 1
+
+        # Reinitialize accumulators if batch size changed or first time
+        need_reinit = (
+            not self.current_episode_rewards or
+            self.agent_ids[0] not in self.current_episode_rewards or
+            len(self.current_episode_rewards[self.agent_ids[0]]) != current_batch_size
+        )
+        if need_reinit:
             self.current_episode_rewards = {
-                agent_id: np.zeros(batch_size) for agent_id in self.agent_ids
+                agent_id: np.zeros(current_batch_size) for agent_id in self.agent_ids
             }
 
         # Accumulate rewards per game in batch
@@ -381,10 +388,8 @@ class EpisodeTracker(BaseBatchTracker, GameTracker):
 
             self.episodes.append(episode_data)
 
-        # Reset for next episode
-        batch_size = len(self.current_episode_rewards[self.agent_ids[0]])
-        for agent_id in self.agent_ids:
-            self.current_episode_rewards[agent_id] = np.zeros(batch_size)
+        # Reset for next episode - clear dict so on_step will reinitialize with correct batch size
+        self.current_episode_rewards = {}
 
     def get_results(self) -> list[dict]:
         """
